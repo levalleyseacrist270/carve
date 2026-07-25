@@ -1,0 +1,73 @@
+# Editable factor space: 23 levels across environment and accident factors.
+# Camera pose, road layout, traffic density, viewpoint, and distance are fixed
+# source-scene variables and are never edited. The level vocabulary here
+# mirrors carve/factors.py, which is the canonical machine-readable form.
+
+environment:
+  illumination: [day, dusk, night]
+  weather: [clear, rain, fog]
+  road_surface: [dry, wet]
+  capture_quality: [clean, compressed, motion_blur]
+
+accident:
+  accident_type:
+    - rear_end
+    - side_impact
+    - t_bone
+    - pedestrian_strike
+    - motorcycle_collision
+    - rollover
+  severity: [minor, moderate, severe]
+  onset: [early, middle, late]
+
+# Onset levels map to visible impact windows for 64-frame clips decoded at
+# 16 fps, keeping context before impact and evidence after impact.
+onset_windows:
+  early: [24, 28]
+  middle: [29, 34]
+  late: [35, 40]
+
+# Feasibility rules remove physically implausible or visually underspecified
+# environment-accident combinations before sampling (enforced by
+# carve/factors.py). Rules with a script note keep the combination but
+# require the edit script to state the given cause; the rollover rule reads
+# source measurements from the manifest (participant_scale,
+# visible_road_fraction) and drops the tuple when they fall short.
+feasibility:
+  - when: {weather: clear, road_surface: wet}
+    require_script_note: wet_pavement_cause
+    note: >-
+      Retained only when the script denotes wet pavement after rain, standing
+      water, or another plausible cause of a wet road.
+  - when: {weather: rain, road_surface: dry}
+    require_script_note: transitional_rain_onset
+    note: >-
+      Requires a short transitional onset of light rain without visible
+      pooling.
+  - when: {accident_type: rollover}
+    require_source_measurements: [participant_scale, visible_road_fraction]
+    note: >-
+      Rollover scripts require sufficient participant scale and visible road
+      space in the source scene.
+
+# Script-note phrasing appended to environment scripts when a feasibility rule
+# demands an explicit cause.
+script_notes:
+  wet_pavement_cause: >-
+    The road surface is wet from earlier rain or standing water; the sky and
+    lighting are otherwise consistent with clear weather.
+  transitional_rain_onset: >-
+    A short transitional onset of light rain has just begun; the road surface
+    remains dry with no visible pooling.
+
+# Compositions held out for compositional-generalization evaluation. They are
+# selected at split time by stratified random sampling over the feasible set,
+# so that every accident type and every environment factor level appears in at
+# least one held-out composition, and are stored alongside the split manifest.
+# They are never hardcoded here. Held-out compositions are blocked when
+# sampling edit tuples for training and validation sources; on test sources
+# they replace one or two regular candidates within the per-source budget.
+held_out:
+  count: 18
+  replace_per_test_source: [1, 2]
+  seed: 20260601

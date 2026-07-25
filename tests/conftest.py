@@ -1,0 +1,10 @@
+"""Make the in-tree package importable when running pytest from a checkout."""
+
+from __future__ import annotations
+
+import sys
+from pathlib import Path
+
+_ROOT = str(Path(__file__).resolve().parents[1])
+if _ROOT not in sys.path:
+    sys.path.insert(0, _ROOT)

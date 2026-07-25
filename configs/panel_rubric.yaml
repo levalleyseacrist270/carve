@@ -1,0 +1,109 @@
+# Fixed scoring rubric for the three-judge validity panel. Every judge
+# receives the identical evidence packet and this rubric, is queried at
+# temperature zero, and must answer with integer scores from 1 to 5 for each
+# dimension using the JSON template embedded in the prompt.
+
+protocol:
+  temperature: 0.0
+  # One retry is issued when a reply cannot be parsed as the required JSON.
+  retries: 1
+  score_range: [1, 5]
+
+# A clip is accepted when the minimum over dimensions of the median over
+# judges is at least min_median, and the maximum over dimensions of the
+# inter-quartile range over judges is at most max_iqr.
+acceptance:
+  min_median: 4
+  max_iqr: 1
+
+dimensions:
+  - key: preservation
+    title: Source-scene preservation
+    question: >-
+      Are camera pose, road geometry, lane count, background structure, and
+      the identities and trajectories of vehicles outside the scripted edit
+      preserved from the source clip?
+    anchors:
+      1: Scene layout, camera pose, or lane structure clearly differs from the source; vehicles appear, vanish, or teleport.
+      2: Multiple visible preservation violations, such as altered road geometry or changed non-participant trajectories.
+      3: Layout is broadly preserved but at least one non-participant vehicle or background element drifts noticeably.
+      4: Preservation holds throughout with only minor, local appearance deviations outside the edit.
+      5: Camera pose, road geometry, lane count, and all non-participant trajectories are indistinguishable from the source.
+
+  - key: environment_correctness
+    title: Environment correctness
+    question: >-
+      Is the environment state of the clip correct for its branch?
+    branch_notes:
+      VE: The requested illumination, weather, road surface, and capture quality are all realized.
+      VA: The source environment is preserved unchanged; no environment factor drifts from the source clip.
+      VAE: The requested illumination, weather, road surface, and capture quality are all realized.
+    anchors:
+      1: The environment state contradicts the branch requirement on most factors.
+      2: Two or more requested factors are missing, or clearly unrequested environment changes appear.
+      3: The dominant factors are correct but one requested factor is weak, partial, or inconsistent across frames.
+      4: All requested factors are realized (or preserved, per branch) with minor intensity deviations.
+      5: The environment matches the branch requirement exactly and consistently across the whole clip.
+
+  - key: accident_correctness
+    title: Accident correctness
+    question: >-
+      Is the accident state of the clip correct for its branch and script?
+    branch_notes:
+      VE: The clip must contain no accident; check for spurious crash motion, contact, debris, or damage.
+      VA: The scripted collision (type, participants, impact region, onset window, severity) is realized under the source environment.
+      VAE: The scripted collision (type, participants, impact region, onset window, severity) is realized under the requested environment.
+    anchors:
+      1: The accident state is wrong, such as spurious crash evidence in a negative branch or no visible collision in a positive branch.
+      2: An event is present but contradicts the script on type, participants, or impact region.
+      3: The scripted event is recognizable but its onset window, severity, or impact region deviates from the script.
+      4: The script is followed with only small deviations in timing or visible severity.
+      5: The accident state matches the branch and script exactly, including participants, region, onset, and severity.
+
+  - key: temporal_continuity
+    title: Temporal continuity
+    question: >-
+      Is motion temporally coherent, without jumps, freezes, duplicated
+      frames, or discontinuous object trajectories?
+    anchors:
+      1: Severe temporal artifacts; motion is incoherent or objects jump between frames.
+      2: Repeated visible discontinuities in object motion or global timing.
+      3: Motion is mostly coherent with isolated stutters or short discontinuities.
+      4: Smooth motion with at most one subtle, local discontinuity.
+      5: Motion is fully coherent and continuous throughout the clip.
+
+  - key: artifact_control
+    title: Artifact control
+    question: >-
+      Is the clip free of generation artifacts such as warping, texture
+      shimmer, ghosting, melting geometry, or duplicated structures?
+    anchors:
+      1: Pervasive artifacts dominate the clip.
+      2: Strong artifacts in several regions or over several frames.
+      3: Noticeable artifacts that stay confined to small regions or brief moments.
+      4: Only faint artifacts visible under close inspection.
+      5: No visible generation artifacts.
+
+  - key: cctv_realism
+    title: CCTV realism
+    question: >-
+      Does the clip look like genuine fixed-camera roadside CCTV footage in
+      framing, optics, noise, and compression character?
+    anchors:
+      1: The clip does not resemble surveillance footage.
+      2: Clearly synthetic appearance or a camera character inconsistent with roadside CCTV.
+      3: Plausible at a glance but with stylistic cues that break the CCTV impression.
+      4: Convincing CCTV appearance with minor stylistic deviations.
+      5: Indistinguishable in style from real fixed-camera roadside CCTV footage.
+
+  - key: label_reliability
+    title: Label reliability
+    question: >-
+      Would a careful human annotator, shown only this clip, assign it the
+      target label with confidence?
+    anchors:
+      1: An annotator would assign the opposite label.
+      2: The label is ambiguous; an annotator could reasonably choose either label.
+      3: The label is recoverable but the evidence is weak or partly occluded.
+      4: The label is clear, with minor room for hesitation.
+      5: The label is unambiguous and immediately evident.

@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+
+# Tooling caches
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+
+# Model weights and checkpoints
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+
+# Generated media and run outputs
+out/
+outputs/
+media/
+*.mp4
+*.avi
+*.mkv
+
+# Local environment and editor files
+.env
+.idea/
+.vscode/

@@ -1,0 +1,120 @@
+# Global configuration for benchmark construction, quality gating, auditing,
+# and hardening. Every numeric setting used by the pipeline lives here so that
+# a run is fully determined by this file plus the factor space in factors.yaml
+# and the panel rubric in panel_rubric.yaml.
+
+clip:
+  fps: 16
+  frames: 64
+  # Positive onset must fall inside this frame band so every accident clip
+  # keeps pre-impact context and post-impact evidence.
+  onset_window: [24, 40]
+  # Negative windows are sampled from the middle fraction of a source video to
+  # avoid title cards and fade artifacts at either end.
+  negative_middle_fraction: 0.8
+
+analysis:
+  # All objective gate measurements run at this square resolution.
+  resolution: 224
+
+gates:
+  objective:
+    # Masked DINO structural similarity between edited and source frames,
+    # computed with the edit region zeroed out.
+    dino_similarity_min: 0.92
+    dino_model: facebook/dinov2-base
+    dino_frame_samples: 8
+    # Per-clip chi-squared distance between magnitude-orientation optical-flow
+    # histograms outside the edit region.
+    mhd_max: 0.25
+    orientation_bins: 8
+    magnitude_bins: 8
+    # Flow magnitudes above this value (pixels/frame) share the top bin.
+    magnitude_clip: 20.0
+    # Median flow-based displacement of non-edit regions between matched
+    # frames, in pixels at the analysis resolution.
+    displacement_px_max: 4
+    displacement_frame_samples: 8
+    # Flow-jump rate: fraction of adjacent-frame transitions whose mean
+    # absolute flow-magnitude change outside the edit exceeds gamma_f.
+    fjr_max: 0.12
+    # gamma_f is calibrated as a percentile of the same statistic on real
+    # source clips held out from generation; set the calibrated value here or
+    # pass it explicitly at gate time.
+    gamma_f: null
+    gamma_f_percentile: 95
+  probe:
+    # Capture-quality probe: a lightweight 3-class classifier used only for
+    # quality filtering.
+    classes: [clean, compressed, motion_blur]
+    checkpoint: null
+    frames_per_clip: 8
+    epochs: 20
+    lr: 1.0e-3
+    batch_size: 16
+
+generation:
+  # At most this many candidate edit tuples are drawn per source clip.
+  per_source_candidate_cap: 6
+  # Hardening rounds oversample candidate tuples by roughly one third and stop
+  # once the accepted budget is met, since about a quarter of candidates fail
+  # the gates.
+  oversample_factor: 1.334
+  key_frame_count: 4
+  # One reference image is shared by the environment and joint branches of a
+  # quartet; the accident-only branch preserves the source environment and
+  # omits the reference.
+  share_reference: true
+  image_backend:
+    endpoint: https://image-edit.example.com/v1
+    model: your-image-edit-model
+    api_key_env: CARVE_IMAGE_API_KEY
+  video_backend:
+    endpoint: https://video-edit.example.com/v1
+    model: your-video-edit-model
+    api_key_env: CARVE_VIDEO_API_KEY
+
+panel:
+  # Three independent judges behind provider-agnostic HTTP interfaces. All
+  # judges are queried at temperature zero with the fixed rubric from
+  # panel_rubric.yaml and a JSON response template.
+  judges:
+    - kind: openai_compatible
+      endpoint: https://api.openai-compatible.example.com/v1
+      model: your-judge-model-a
+      api_key_env: CARVE_JUDGE_A_API_KEY
+    - kind: google_compatible
+      endpoint: https://api.google-compatible.example.com/v1beta
+      model: your-judge-model-b
+      api_key_env: CARVE_JUDGE_B_API_KEY
+    - kind: local_open_weights
+      endpoint: http://localhost:8000/v1
+      model: your-local-vlm
+      api_key_env: CARVE_JUDGE_C_API_KEY
+
+losses:
+  lambda_ep: 0.5
+  lambda_ic: 1.0
+  lambda_fm: 0.25
+  delta: 0.4
+
+sampler:
+  # Concentration exponent for weak-factor sampling probabilities.
+  alpha: 1.5
+  # Term weights for the factor brittleness score, in order:
+  # (1 - CPS_c), NESI_c, ESI_c, PMR_c, CGS_gap_c. Weights of unavailable terms
+  # are renormalized to sum to one.
+  eta: [0.25, 0.15, 0.20, 0.25, 0.15]
+  # Empirical-Bayes shrinkage strength toward the pooled mean for small
+  # per-factor validation slices.
+  shrinkage: 8.0
+
+training:
+  lr: 3.0e-4
+  weight_decay: 0.05
+  batch_size: 32
+  epochs: 30
+  rounds: 3
+  # Each hardening round targets generated edit entries amounting to this
+  # fraction of the real training clips.
+  budget_fraction: 0.25
