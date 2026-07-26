@@ -76,19 +76,30 @@ def positive_window(
     impact_frame: int,
     total_frames: int,
     rng: Optional[np.random.Generator] = None,
+    onset_range: Optional[tuple[int, int]] = None,
 ) -> Optional[ClipWindow]:
     """Positive clip centered on the first visible impact frame.
 
-    The window start is chosen so the onset lands at frame 32 of the clip
-    (jittered uniformly over the 24-40 band when ``rng`` is given), then
-    clamped to the video and to the band. Returns ``None`` when no valid
-    64-frame window exists.
+    The window start places the onset at the center of the admissible band
+    (frame 32 under the default 24-40 band), jittered uniformly over the
+    band when ``rng`` is given, then clamped to the video and to the band.
+    ``onset_range`` overrides the band for protocol variants; when omitted
+    the module default applies. Returns ``None`` when no valid 64-frame
+    window exists.
     """
-    lo = max(impact_frame - ONSET_RANGE[1], 0)
-    hi = min(impact_frame - ONSET_RANGE[0], total_frames - CLIP_FRAMES)
+    band = onset_range if onset_range is not None else ONSET_RANGE
+    if not 0 <= band[0] <= band[1] < CLIP_FRAMES:
+        raise ValueError(
+            f"onset band {band} must satisfy 0 <= low <= high < {CLIP_FRAMES}"
+        )
+    lo = max(impact_frame - band[1], 0)
+    hi = min(impact_frame - band[0], total_frames - CLIP_FRAMES)
     if hi < lo:
         return None
-    target_onset = int(rng.integers(ONSET_RANGE[0], ONSET_RANGE[1] + 1)) if rng is not None else 32
+    if rng is not None:
+        target_onset = int(rng.integers(band[0], band[1] + 1))
+    else:
+        target_onset = (band[0] + band[1]) // 2
     start = int(np.clip(impact_frame - target_onset, lo, hi))
     return ClipWindow(start=start, end=start + CLIP_FRAMES, label=1, onset=impact_frame)
 
@@ -110,16 +121,18 @@ def cadp_paired_windows(
     onset_frame: int,
     total_frames: int,
     rng: Optional[np.random.Generator] = None,
+    onset_range: Optional[tuple[int, int]] = None,
 ) -> Optional[tuple[ClipWindow, ClipWindow]]:
     """Paired positive and negative windows for one CADP event.
 
     The positive clip is centered on the annotated impact; the negative clip
     is the verified clean 4-second window ending before the annotated onset.
     Both clips derive from the same event and must be assigned to the same
-    split (the split unit is the event). Returns ``None`` when the event
-    cannot provide both windows.
+    split (the split unit is the event). ``onset_range`` is forwarded to the
+    positive-window placement. Returns ``None`` when the event cannot
+    provide both windows.
     """
-    positive = positive_window(onset_frame, total_frames, rng)
+    positive = positive_window(onset_frame, total_frames, rng, onset_range)
     if positive is None or onset_frame < CLIP_FRAMES:
         return None
     negative = ClipWindow(

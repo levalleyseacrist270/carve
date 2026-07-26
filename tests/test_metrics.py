@@ -6,7 +6,9 @@ records; no video, torch, or generation backend is involved.
 
 from __future__ import annotations
 
+import importlib.util
 import math
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -438,3 +440,73 @@ def test_feasibility_rules_and_reasons() -> None:
         DAY_ENV, rollover, EditContext(participant_scale=0.2, visible_road_fraction=0.5)
     )
     assert ok
+
+
+# ------------------------------------------------ runtime configuration keys
+
+
+def test_configuration_keys_change_effective_settings() -> None:
+    """Shared configuration blocks must reach the loop, losses, and clips."""
+    root = Path(__file__).resolve().parents[1]
+    spec = importlib.util.spec_from_file_location(
+        "_hardening_cli", root / "scripts" / "run_hardening.py"
+    )
+    cli = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(cli)
+
+    parsed = {
+        "losses": {"lambda_ep": 0.6, "lambda_ic": 0.9, "lambda_fm": 0.3, "delta": 0.35},
+        "sampler": {"alpha": 2.0, "eta": [0.30, 0.10, 0.20, 0.25, 0.15], "shrinkage": 4.0},
+        "training": {
+            "lr": 1.0e-4,
+            "weight_decay": 0.01,
+            "batch_size": 16,
+            "epochs": 12,
+            "rounds": 2,
+            "budget_fraction": 0.5,
+        },
+        "generation": {"oversample_factor": 1.5},
+        "clip": {"onset_window": [26, 38]},
+    }
+    loop_kwargs, loss_kwargs, onset_range = cli._merge_loop_settings(parsed)
+    assert loop_kwargs["alpha"] == 2.0
+    assert loop_kwargs["shrinkage"] == 4.0
+    assert loop_kwargs["fss_weights"] == (0.30, 0.10, 0.20, 0.25, 0.15)
+    assert loop_kwargs["learning_rate"] == pytest.approx(1.0e-4)
+    assert loop_kwargs["weight_decay"] == pytest.approx(0.01)
+    assert loop_kwargs["batch_size"] == 16
+    assert loop_kwargs["pretrain_epochs"] == 12
+    assert loop_kwargs["rounds"] == 2
+    assert loop_kwargs["budget_fraction"] == 0.5
+    assert loop_kwargs["oversample"] == pytest.approx(0.5)  # multiplier minus one
+    assert loss_kwargs == {
+        "environment_purity": 0.6,
+        "intervention_consistency": 0.9,
+        "faithfulness_margin": 0.3,
+        "margin": 0.35,
+    }
+    assert onset_range == (26, 38)
+
+    # Absent keys leave the built-in defaults untouched, and an explicit
+    # loop block wins over the shared blocks.
+    assert cli._merge_loop_settings({}) == ({}, {}, None)
+    winner, _, _ = cli._merge_loop_settings(
+        {"sampler": {"alpha": 2.0}, "loop": {"alpha": 3.0}}
+    )
+    assert winner["alpha"] == 3.0
+
+    # The alpha override visibly changes the sampling distribution.
+    stress = {"illumination=night": 0.8, "weather=fog": 0.4}
+    default_probs = sampling_probabilities(stress)
+    overridden = sampling_probabilities(stress, alpha=loop_kwargs["alpha"])
+    assert overridden["illumination=night"] > default_probs["illumination=night"]
+
+    # The onset band override moves the clip-window placement.
+    from carve.data.clips import positive_window
+
+    default_window = positive_window(100, 1000)
+    custom_window = positive_window(100, 1000, onset_range=(30, 30))
+    assert default_window.onset_in_clip == 32
+    assert custom_window.onset_in_clip == 30
+    with pytest.raises(ValueError):
+        positive_window(100, 1000, onset_range=(40, 24))

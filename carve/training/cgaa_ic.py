@@ -28,6 +28,7 @@ from ..core import AccidentSpec, Branch, EnvironmentSpec, GateResult, QuartetRec
 from ..data.quartets import ClipDataset, ClipLoader, LabeledClip, QuartetDataset
 from ..metrics import (
     DEFAULT_SHRINKAGE,
+    FSS_WEIGHTS,
     AuditSummary,
     audit_quartets,
     factor_stress_scores,
@@ -114,6 +115,7 @@ class HardeningConfig:
     loss_weights: LossWeights = field(default_factory=LossWeights)
     device: Optional[str] = None
     num_workers: int = 0
+    fss_weights: tuple[float, float, float, float, float] = FSS_WEIGHTS
 
 
 @dataclass
@@ -399,7 +401,7 @@ def run_hardening(
         score_quartet_records(detector, audit_records, clip_loader, device, cfg.batch_size)
         audit = audit_quartets(audit_records, tau)
         diagnostics = per_level_diagnostics(audit_records, tau, cfg.shrinkage)
-        stress = factor_stress_scores(diagnostics)
+        stress = factor_stress_scores(diagnostics, cfg.fss_weights)
         sampler = WeakFactorSampler(
             stress,
             alpha=cfg.alpha,

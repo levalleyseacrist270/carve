@@ -19,12 +19,35 @@ The configuration is JSON or YAML with the layout::
       reference_gate: mypackage.backend:build_reference_gate
       quartet_generator: mypackage.backend:build_quartet_generator
       quartet_gate: mypackage.backend:build_quartet_gate
-    loop:                                         # optional HardeningConfig overrides
+    losses:                                       # loss coefficients and margin
+      lambda_ep: 0.5
+      lambda_ic: 1.0
+      lambda_fm: 0.25
+      delta: 0.4
+    sampler:                                      # weak-factor sampling
+      alpha: 1.5
+      eta: [0.25, 0.15, 0.20, 0.25, 0.15]
+      shrinkage: 8.0
+    training:                                     # optimizer, schedule, budget
+      lr: 3.0e-4
+      weight_decay: 0.05
+      batch_size: 32
+      epochs: 30
       rounds: 3
       budget_fraction: 0.25
+    generation:
+      oversample_factor: 1.334                    # multiplier of the accepted budget
+    clip:
+      onset_window: [24, 40]                      # admissible impact-frame band
+    loop:                                         # direct HardeningConfig overrides
+      rounds: 3
     output: runs/hardening
 
-Dotted overrides are applied last, e.g. ``--set loop.rounds=2``.
+The shared blocks above populate the loop configuration; an explicit
+``loop`` block takes precedence key by key, built-in defaults cover any
+absent key, and dotted overrides are applied last, e.g. ``--set
+sampler.alpha=2.0`` or ``--set loop.rounds=2``. The effective settings are
+echoed into ``summary.json``.
 """
 
 from __future__ import annotations
@@ -93,6 +116,74 @@ def _load_blocked(path: str | None) -> list[str]:
     return [line.strip() for line in lines if line.strip()]
 
 
+_TRAINING_KEYS: dict[str, tuple[str, type]] = {
+    "lr": ("learning_rate", float),
+    "weight_decay": ("weight_decay", float),
+    "batch_size": ("batch_size", int),
+    "epochs": ("pretrain_epochs", int),
+    "rounds": ("rounds", int),
+    "budget_fraction": ("budget_fraction", float),
+}
+_LOSS_KEYS: dict[str, str] = {
+    "lambda_ep": "environment_purity",
+    "lambda_ic": "intervention_consistency",
+    "lambda_fm": "faithfulness_margin",
+    "delta": "margin",
+}
+
+
+def _merge_loop_settings(
+    config: dict,
+) -> tuple[dict, dict, tuple[int, int] | None]:
+    """Resolve effective loop settings from the shared configuration blocks.
+
+    Returns keyword arguments for the loop configuration, keyword arguments
+    for the loss weights, and the admissible impact-frame band from
+    ``clip.onset_window`` (used by the clip-window protocol and echoed with
+    the run summary). Only keys that are present are mapped, so built-in
+    defaults remain the fallback; an explicit ``loop`` block wins key by
+    key over the shared blocks.
+    """
+    loop: dict = {}
+    training = config.get("training") or {}
+    for key, (target, cast) in _TRAINING_KEYS.items():
+        if key in training:
+            loop[target] = cast(training[key])
+    sampler = config.get("sampler") or {}
+    if "alpha" in sampler:
+        loop["alpha"] = float(sampler["alpha"])
+    if "shrinkage" in sampler:
+        loop["shrinkage"] = float(sampler["shrinkage"])
+    if "eta" in sampler:
+        eta = tuple(float(value) for value in sampler["eta"])
+        if len(eta) != 5:
+            raise ValueError("sampler.eta must list exactly five term weights")
+        loop["fss_weights"] = eta
+    generation = config.get("generation") or {}
+    if "oversample_factor" in generation:
+        factor = float(generation["oversample_factor"])
+        if factor < 1.0:
+            raise ValueError(
+                "generation.oversample_factor multiplies the accepted budget and must be >= 1"
+            )
+        loop["oversample"] = factor - 1.0
+    loss_block = config.get("losses") or {}
+    losses = {
+        target: float(loss_block[key])
+        for key, target in _LOSS_KEYS.items()
+        if key in loss_block
+    }
+    onset_range: tuple[int, int] | None = None
+    clip_block = config.get("clip") or {}
+    if "onset_window" in clip_block:
+        low, high = (int(value) for value in clip_block["onset_window"])
+        if not 0 <= low <= high:
+            raise ValueError("clip.onset_window must be an ordered [low, high] frame band")
+        onset_range = (low, high)
+    loop.update(config.get("loop") or {})
+    return loop, losses, onset_range
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--config", type=Path, required=True, help="JSON or YAML configuration")
@@ -118,12 +209,15 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     _ensure_package()
 
+    import dataclasses
+
     import numpy as np
     import torch
 
     from carve.data.quartets import load_labeled_clips, load_manifest, save_manifest
     from carve.models.detector import VideoMAEDetector
     from carve.training.cgaa_ic import HardeningConfig, SourceClip, run_hardening
+    from carve.training.losses import LossWeights
 
     config = _load_config(args.config)
     _apply_overrides(config, args.overrides)
@@ -153,7 +247,10 @@ def main(argv: list[str] | None = None) -> int:
     )
     clip_loader: Callable = _resolve(config["loader"])
     backend = config["backend"]
-    loop_cfg = HardeningConfig(**config.get("loop", {}))
+    loop_kwargs, loss_kwargs, onset_range = _merge_loop_settings(config)
+    if loss_kwargs and "loss_weights" not in loop_kwargs:
+        loop_kwargs["loss_weights"] = LossWeights(**loss_kwargs)
+    loop_cfg = HardeningConfig(**loop_kwargs)
     rng = np.random.default_rng(args.seed)
 
     result = run_hardening(
@@ -174,8 +271,11 @@ def main(argv: list[str] | None = None) -> int:
 
     output = args.output or Path(config.get("output", "runs/hardening"))
     output.mkdir(parents=True, exist_ok=True)
+    effective = dataclasses.asdict(loop_cfg)
+    effective["clip_onset_window"] = list(onset_range) if onset_range else None
     summary = {
         "seed": args.seed,
+        "effective_config": effective,
         "rounds": [report.as_dict() for report in result.rounds],
         "accepted_quartets": len(result.synthetic),
     }
