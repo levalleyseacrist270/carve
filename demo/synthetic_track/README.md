@@ -17,6 +17,9 @@ appear anywhere in this track.
   post-rain dusk), four sources each. Each reference passed a manual screen:
   road topology and vehicle layout preserved, requested environment realized,
   no spurious accident content.
+- `previews/src01_V0_frames.png` … `src12_V0_frames.png` — six-frame preview
+  grids (uniformly sampled) of each source clip, for quick inspection in
+  mirrors that do not render video files.
 
 ## What comes next
 
