@@ -31,3 +31,6 @@ media/
 .env
 .idea/
 .vscode/
+
+# Demo media are part of the release
+!demo/synthetic_track/**/*.mp4
