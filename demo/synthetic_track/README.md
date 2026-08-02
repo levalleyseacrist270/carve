@@ -1,4 +1,4 @@
-# Synthetic demonstration track (in progress — stage 1)
+# Synthetic demonstration track (in progress — stages 1-2)
 
 This directory holds the first stage of a fully synthetic demonstration track for
 the CARVE pipeline. Nothing here is derived from real footage: every clip and
@@ -20,6 +20,15 @@ appear anywhere in this track.
 - `previews/src01_V0_frames.png` … `src12_V0_frames.png` — six-frame preview
   grids (uniformly sampled) of each source clip, for quick inspection in
   mirrors that do not render video files.
+- `quartets/` — the first three complete quartets (src01, src03, src05):
+  all four branches per source in the 64-frame / 16 fps protocol format,
+  each frame carrying a visible SYNTHETIC watermark, plus one four-row
+  comparison grid per quartet (`*_quartet_grid.png`, rows V0 / VE / VA / VAE,
+  six frames per row) so the counterfactual structure is inspectable in
+  mirrors that do not render video. Branches passed the manual screen
+  (environment realized on VE with no spurious accident; visible mid-clip
+  collision on VA / VAE; fixed viewpoint; source-consistent layout).
+  Programmatic gate runs and audit numbers ship with the completed track.
 
 ## What comes next
 
