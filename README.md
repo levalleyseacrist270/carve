@@ -84,10 +84,14 @@ carve/
 scripts/
   build_benchmark.py       manifest of sources -> gated quartet records
   run_audit.py             quartet records + detectors -> audit outputs
+  run_hardening.py         config-driven CGAA-IC loop entry point
+  calibrate_threshold.py   operating-point sweep on validation scores
 configs/
   default.yaml             all thresholds and hyperparameters
   factors.yaml             factor space, feasibility rules, held-out policy
   panel_rubric.yaml        seven-dimension rubric and acceptance thresholds
+tests/                     synthetic-score tests for metrics and sampling
+demo/synthetic_track/      fully synthetic demonstration media (see README)
 ```
 
 ## Quickstart
@@ -155,14 +159,17 @@ The deployed model keeps the base inference graph.
 
 ## Data and media
 
-This release contains code and configuration. Benchmark media are not
-distributed: the source datasets license their footage for research use
-without redistribution of derived media, CCTV frames show road users who gave
-no consent to further distribution, and synthetic crash footage warrants
-access control. Users supply their own licensed static-camera footage,
-generator endpoints, and VLM endpoints; the gates and acceptance criteria in
-this repository define what enters a benchmark, independently of the chosen
-backends.
+This release contains code, configuration, and a fully synthetic
+demonstration track under `demo/synthetic_track/` (synthetic source clips,
+environment reference frames, preview grids, and the first complete
+quartets; see the README there). Benchmark media derived from real footage
+are not distributed: the source datasets license their footage for research
+use without redistribution of derived media, CCTV frames show road users who
+gave no consent to further distribution, and synthetic crash footage anchored
+to real scenes warrants access control. Users supply their own licensed
+static-camera footage, generator endpoints, and VLM endpoints; the gates and
+acceptance criteria in this repository define what enters a benchmark,
+independently of the chosen backends.
 
 ## License
 

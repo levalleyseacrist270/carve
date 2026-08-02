@@ -20,15 +20,18 @@ appear anywhere in this track.
 - `previews/src01_V0_frames.png` … `src12_V0_frames.png` — six-frame preview
   grids (uniformly sampled) of each source clip, for quick inspection in
   mirrors that do not render video files.
-- `quartets/` — the first three complete quartets (src01, src03, src05):
-  all four branches per source in the 64-frame / 16 fps protocol format,
-  each frame carrying a visible SYNTHETIC watermark, plus one four-row
-  comparison grid per quartet (`*_quartet_grid.png`, rows V0 / VE / VA / VAE,
-  six frames per row) so the counterfactual structure is inspectable in
-  mirrors that do not render video. Branches passed the manual screen
-  (environment realized on VE with no spurious accident; visible mid-clip
-  collision on VA / VAE; fixed viewpoint; source-consistent layout).
-  Programmatic gate runs and audit numbers ship with the completed track.
+- `quartets/` — the first two complete quartets (src03, src05): all four
+  branches per source in the 64-frame / 16 fps protocol format, each frame
+  carrying a visible SYNTHETIC watermark, plus one four-row comparison grid
+  per quartet (`*_quartet_grid.png`, rows V0 / VE / VA / VAE, six frames per
+  row) so the counterfactual structure is inspectable in mirrors that do not
+  render video. Branches passed the manual screen: environment realized on VE
+  with no spurious accident, mid-clip vehicle contact visible and sustained
+  on VA / VAE, fixed viewpoint, source-consistent layout. Candidates that
+  failed the screen (for example, a late near-collision without clear
+  contact) were excluded, mirroring how the quality gates discard
+  borderline generations. Programmatic gate runs and audit numbers ship
+  with the completed track.
 
 ## What comes next
 
